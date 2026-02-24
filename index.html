@@ -17,11 +17,14 @@
       padding: 10px 12px;
       backdrop-filter: blur(10px);
       max-width: 620px;
+      margin: 0 auto;
     }
     .topbar {
       position: fixed; left: 12px; top: 12px; right: 12px;
       display: flex; gap: 8px; align-items: center;
       max-width: 620px;
+      margin: 0 auto;
+      z-index: 5;
     }
     .badge {
       font: 12px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
@@ -31,7 +34,18 @@
       padding: 6px 10px;
       border-radius: 999px;
     }
-    a { color: #b7a7ff; }
+    #debug {
+      position: fixed; left: 12px; right: 12px; top: 60px;
+      max-width: 620px; margin: 0 auto;
+      color: #fff;
+      background: rgba(0,0,0,.72);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      white-space: pre-wrap;
+      z-index: 10;
+    }
   </style>
 </head>
 <body>
@@ -39,334 +53,202 @@
   <div class="topbar">
     <div class="badge"><b>Realistic 3D Gas Pump</b> — drag to orbit, pinch to zoom</div>
   </div>
+  <div id="debug">Loading…</div>
   <div class="hud">
-    Mobile: <b>1 finger</b> rotate · <b>2 fingers</b> pan · <b>pinch</b> zoom. 
-    PBR + HDR lighting for a more realistic look.
+    Mobile: <b>1 finger</b> rotate · <b>2 fingers</b> pan · <b>pinch</b> zoom.
   </div>
 
-  <script type="module">
-    // Local vendored three.js to avoid mobile browsers blocking cross-site module imports.
-    import * as THREE from './vendor/three/three.module.js';
-    import { OrbitControls } from './vendor/three/examples/jsm/controls/OrbitControls.js';
-    import { RGBELoader } from './vendor/three/examples/jsm/loaders/RGBELoader.js';
+  <!-- Babylon.js (non-module) for maximum mobile compatibility -->
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
 
-    function showOverlay(text) {
-      const div = document.createElement('div');
-      div.style.cssText = 'position:fixed;left:12px;right:12px;top:60px;max-width:620px;margin:0 auto;color:#fff;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:10px 12px;font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;white-space:pre-wrap;z-index:9999;';
-      div.textContent = text;
-      document.body.appendChild(div);
-      return div;
-    }
+  <script>
+    (function () {
+      const debug = document.getElementById('debug');
+      function setDebug(t){ debug.textContent = t; }
 
-    try {
-      const canvas = document.querySelector('#c');
-      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
-      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-      renderer.setSize(window.innerWidth, window.innerHeight, false);
-      renderer.outputColorSpace = THREE.SRGBColorSpace;
-      renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.05;
-      renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-      const scene = new THREE.Scene();
-      scene.background = new THREE.Color('#0b0f17');
-
-      // Debug overlay (helps on mobile when rendering is blank)
-      const debug = showOverlay('Loading Three.js scene…');
-
-      // Basic WebGL support check
-      const gl = renderer.getContext();
-      if (!gl) {
-        debug.textContent = 'ERROR: WebGL context could not be created.';
-      }
-
-      const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-      camera.position.set(3.4, 2.2, 4.6);
-
-      const controls = new OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true;
-      controls.target.set(0, 1.15, 0);
-      controls.minDistance = 2.2;
-      controls.maxDistance = 10;
-
-      // --- Lighting (HDR environment + standard lights)
-      const pmrem = new THREE.PMREMGenerator(renderer);
-      pmrem.compileEquirectangularShader();
-
-      new RGBELoader()
-        .setPath('https://threejs.org/examples/textures/equirectangular/')
-        .load(
-          'royal_esplanade_1k.hdr',
-          (hdrTex) => {
-            const env = pmrem.fromEquirectangular(hdrTex).texture;
-            scene.environment = env;
-            hdrTex.dispose();
-            pmrem.dispose();
-          },
-          undefined,
-          (err) => {
-            console.warn('HDR environment failed to load; continuing with standard lights.', err);
-            debug.textContent += '\nWARN: HDR failed to load (still should render).';
-            try { pmrem.dispose(); } catch {}
-          }
-        );
-
-      scene.add(new THREE.AmbientLight(0xffffff, 0.60));
-      const hemi = new THREE.HemisphereLight(0xbfd7ff, 0x0b0f17, 0.70);
-      hemi.position.set(0, 6, 0);
-      scene.add(hemi);
-
-      const key = new THREE.DirectionalLight(0xffffff, 3.4);
-      key.position.set(4.5, 6.5, 3.5);
-      key.castShadow = true;
-      key.shadow.mapSize.set(1024, 1024);
-      key.shadow.camera.near = 0.5;
-      key.shadow.camera.far = 25;
-      key.shadow.camera.left = -6;
-      key.shadow.camera.right = 6;
-      key.shadow.camera.top = 6;
-      key.shadow.camera.bottom = -6;
-      scene.add(key);
-
-      const fill = new THREE.DirectionalLight(0x7a5cff, 0.95);
-      fill.position.set(-5.5, 2.5, -5.5);
-      scene.add(fill);
-
-      // Always-visible test cube + axes (if you see these, render loop is working)
-      const axes = new THREE.AxesHelper(2);
-      axes.position.y = 0.01;
-      scene.add(axes);
-      const testCube = new THREE.Mesh(
-        new THREE.BoxGeometry(0.3, 0.3, 0.3),
-        new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.4, metalness: 0.1 })
-      );
-      testCube.position.set(-1.2, 0.6, 0);
-      testCube.castShadow = true;
-      scene.add(testCube);
-
-      debug.textContent = 'Three.js loaded OK. If screen is still blank, it\'s a WebGL/browser issue.\n' +
-        'UA: ' + navigator.userAgent;
-
-      // (rest of scene continues below)
-
-    // Ground plane (receives shadow)
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(30, 30),
-      new THREE.MeshStandardMaterial({ color: 0x0f1624, roughness: 0.98, metalness: 0.0 })
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = 0;
-    ground.receiveShadow = true;
-    scene.add(ground);
-
-    // --- Simple bevel-ish: build with extra edge details (not true fillet, but looks better)
-    function matPaint(color) {
-      return new THREE.MeshPhysicalMaterial({
-        color,
-        roughness: 0.35,
-        metalness: 0.25,
-        clearcoat: 0.35,
-        clearcoatRoughness: 0.35,
-      });
-    }
-
-    const matRubber = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.95, metalness: 0.02 });
-    const matDarkMetal = new THREE.MeshStandardMaterial({ color: 0x2a3346, roughness: 0.45, metalness: 0.75 });
-    const matSteel = new THREE.MeshStandardMaterial({ color: 0x98a6ba, roughness: 0.35, metalness: 0.9 });
-    const matPlastic = new THREE.MeshStandardMaterial({ color: 0x101827, roughness: 0.7, metalness: 0.05 });
-    const matGlass = new THREE.MeshPhysicalMaterial({
-      color: 0x67d6ff,
-      roughness: 0.05,
-      metalness: 0.0,
-      transmission: 0.55,
-      thickness: 0.02,
-      ior: 1.5,
-      clearcoat: 0.15,
-      clearcoatRoughness: 0.2,
-    });
-
-    function box(w, h, d, material) {
-      return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
-    }
-
-    function cyl(rTop, rBot, h, material, radial = 28) {
-      return new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, h, radial), material);
-    }
-
-    // --- Pump group
-    const pump = new THREE.Group();
-
-    // Base (rubber pad + metal skirt)
-    const basePad = box(1.16, 0.06, 0.96, matRubber);
-    basePad.position.y = 0.03;
-    basePad.castShadow = true;
-    basePad.receiveShadow = true;
-    pump.add(basePad);
-
-    const baseSkirt = box(1.12, 0.16, 0.92, matDarkMetal);
-    baseSkirt.position.y = 0.06 + 0.08;
-    baseSkirt.castShadow = true;
-    baseSkirt.receiveShadow = true;
-    pump.add(baseSkirt);
-
-    // Main body
-    const body = box(0.92, 1.55, 0.72, matPaint(0xd12f2f));
-    body.position.y = 0.22 + 1.55 / 2;
-    body.castShadow = true;
-    body.receiveShadow = true;
-    pump.add(body);
-
-    // Side column (hose bay)
-    const side = box(0.16, 1.55, 0.72, matPaint(0x9d1f1f));
-    side.position.set(0.54, body.position.y, 0);
-    side.castShadow = true;
-    side.receiveShadow = true;
-    pump.add(side);
-
-    // Top cap
-    const cap = box(1.02, 0.18, 0.78, matPaint(0xa92020));
-    cap.position.y = 0.22 + 1.55 + 0.09;
-    cap.castShadow = true;
-    cap.receiveShadow = true;
-    pump.add(cap);
-
-    // Face bezel
-    const bezel = box(0.64, 0.52, 0.06, matPlastic);
-    bezel.position.set(0, 0.22 + 1.08, 0.36);
-    bezel.castShadow = true;
-    bezel.receiveShadow = true;
-    pump.add(bezel);
-
-    // Screen glass
-    const screen = box(0.54, 0.36, 0.012, matGlass);
-    screen.position.set(0, 0.02, 0.037);
-    bezel.add(screen);
-
-    // Keypad
-    const keypad = box(0.54, 0.42, 0.05, matPlastic);
-    keypad.position.set(0, 0.22 + 0.70, 0.35);
-    keypad.castShadow = true;
-    keypad.receiveShadow = true;
-    pump.add(keypad);
-
-    const btnMat = new THREE.MeshStandardMaterial({ color: 0xe8eefc, roughness: 0.35, metalness: 0.08 });
-    const btnGeom = new THREE.BoxGeometry(0.10, 0.06, 0.03);
-    for (let r = 0; r < 4; r++) {
-      for (let c = 0; c < 3; c++) {
-        const b = new THREE.Mesh(btnGeom, btnMat);
-        b.position.set(-0.14 + c * 0.14, 0.12 + r * 0.09, 0.03);
-        b.castShadow = true;
-        keypad.add(b);
-      }
-    }
-
-    // Card reader slot
-    const slot = box(0.36, 0.05, 0.05, matDarkMetal);
-    slot.position.set(0, 0.22 + 0.52, 0.35);
-    slot.castShadow = true;
-    pump.add(slot);
-
-    // Decal/sign plate
-    const sign = box(0.76, 0.22, 0.03, new THREE.MeshStandardMaterial({ color: 0xf4f6ff, roughness: 0.65, metalness: 0.05 }));
-    sign.position.set(0, 0.22 + 1.33, 0.36);
-    sign.castShadow = true;
-    pump.add(sign);
-
-    // Holster
-    const holster = box(0.16, 0.32, 0.28, matPlastic);
-    holster.position.set(0.60, 0.22 + 0.86, 0.22);
-    holster.castShadow = true;
-    holster.receiveShadow = true;
-    pump.add(holster);
-
-    // Nozzle
-    const nozzle = new THREE.Group();
-    const handle = box(0.08, 0.22, 0.07, matDarkMetal);
-    handle.position.set(0, 0.11, 0);
-    handle.castShadow = true;
-    nozzle.add(handle);
-
-    const trigger = box(0.02, 0.10, 0.05, matSteel);
-    trigger.position.set(0.02, 0.08, 0.03);
-    trigger.castShadow = true;
-    nozzle.add(trigger);
-
-    const spout = cyl(0.018, 0.012, 0.24, matSteel);
-    spout.rotation.z = Math.PI / 2;
-    spout.position.set(-0.13, 0.16, 0);
-    spout.castShadow = true;
-    nozzle.add(spout);
-
-    nozzle.position.set(0.64, 0.22 + 0.78, 0.22);
-    nozzle.rotation.y = -0.65;
-    pump.add(nozzle);
-
-    // Hose (tube)
-    const hosePts = [
-      new THREE.Vector3(0.64, 0.22 + 0.75, 0.16),
-      new THREE.Vector3(1.00, 0.22 + 0.60, 0.04),
-      new THREE.Vector3(0.86, 0.22 + 0.30, -0.18),
-      new THREE.Vector3(0.52, 0.22 + 0.18, -0.10),
-    ];
-    const hoseCurve = new THREE.CatmullRomCurve3(hosePts);
-    const hoseGeom = new THREE.TubeGeometry(hoseCurve, 80, 0.02, 12, false);
-    const hose = new THREE.Mesh(hoseGeom, matRubber);
-    hose.castShadow = true;
-    pump.add(hose);
-
-    // Add some small metallic bolts (tiny cylinders) for realism
-    const boltGeom = new THREE.CylinderGeometry(0.012, 0.012, 0.01, 14);
-    for (const x of [-0.42, 0.42]) {
-      for (const y of [0.22 + 0.30, 0.22 + 1.20]) {
-        const bolt = new THREE.Mesh(boltGeom, matSteel);
-        bolt.rotation.x = Math.PI / 2;
-        bolt.position.set(x, y, 0.36);
-        bolt.castShadow = true;
-        pump.add(bolt);
-      }
-    }
-
-    pump.position.y = 0;
-    scene.add(pump);
-
-    // Subtle idle movement
-    const clock = new THREE.Clock();
-
-    function resize() {
-      const w = canvas.clientWidth;
-      const h = canvas.clientHeight;
-      const need = (canvas.width !== Math.floor(w * renderer.getPixelRatio())) || (canvas.height !== Math.floor(h * renderer.getPixelRatio()));
-      if (need) {
-        renderer.setSize(w, h, false);
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-      }
-    }
-
-    function render() {
-      resize();
-      const t = clock.getElapsedTime();
-      pump.rotation.y = Math.sin(t * 0.22) * 0.06;
-      controls.update();
-      renderer.render(scene, camera);
-      requestAnimationFrame(render);
-    }
-
-    render();
-
-    window.addEventListener('resize', () => resize());
-
-    } catch (err) {
-      const msg = (err && (err.stack || err.message)) ? (err.stack || err.message) : String(err);
       try {
-        const div = document.createElement('div');
-        div.style.cssText = 'position:fixed;inset:12px;display:flex;align-items:center;justify-content:center;color:#fff;background:rgba(0,0,0,.75);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px;font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;white-space:pre-wrap;';
-        div.textContent = 'JS ERROR while initializing the 3D scene:\n\n' + msg;
-        document.body.appendChild(div);
-      } catch {}
-      console.error(err);
-    }
+        const canvas = document.getElementById('c');
+        const engine = new BABYLON.Engine(canvas, true, {
+          preserveDrawingBuffer: true,
+          stencil: true,
+          disableWebGL2Support: false,
+        });
+
+        const scene = new BABYLON.Scene(engine);
+        scene.clearColor = new BABYLON.Color4(0.043, 0.059, 0.090, 1);
+
+        // Camera
+        const camera = new BABYLON.ArcRotateCamera('cam', -Math.PI/2.2, Math.PI/3, 6.0, new BABYLON.Vector3(0, 1.2, 0), scene);
+        camera.attachControl(canvas, true);
+        camera.lowerRadiusLimit = 2.2;
+        camera.upperRadiusLimit = 12;
+        camera.panningSensibility = 1200;
+        camera.wheelPrecision = 50;
+
+        // Lights
+        const hemi = new BABYLON.HemisphericLight('hemi', new BABYLON.Vector3(0, 1, 0), scene);
+        hemi.intensity = 0.85;
+        hemi.groundColor = new BABYLON.Color3(0.05, 0.06, 0.08);
+
+        const key = new BABYLON.DirectionalLight('key', new BABYLON.Vector3(-0.6, -1, -0.4), scene);
+        key.position = new BABYLON.Vector3(6, 10, 6);
+        key.intensity = 1.35;
+
+        // Ground
+        const ground = BABYLON.MeshBuilder.CreateGround('ground', { width: 30, height: 30 }, scene);
+        const groundMat = new BABYLON.PBRMaterial('groundMat', scene);
+        groundMat.albedoColor = new BABYLON.Color3(0.06, 0.08, 0.13);
+        groundMat.roughness = 1.0;
+        groundMat.metallic = 0.0;
+        ground.material = groundMat;
+
+        // Materials
+        const paintRed = new BABYLON.PBRMaterial('paintRed', scene);
+        paintRed.albedoColor = new BABYLON.Color3(0.82, 0.16, 0.16);
+        paintRed.metallic = 0.3;
+        paintRed.roughness = 0.35;
+        paintRed.clearCoat.isEnabled = true;
+        paintRed.clearCoat.intensity = 0.35;
+
+        const paintDeepRed = new BABYLON.PBRMaterial('paintDeepRed', scene);
+        paintDeepRed.albedoColor = new BABYLON.Color3(0.62, 0.12, 0.12);
+        paintDeepRed.metallic = 0.28;
+        paintDeepRed.roughness = 0.38;
+        paintDeepRed.clearCoat.isEnabled = true;
+        paintDeepRed.clearCoat.intensity = 0.25;
+
+        const darkMetal = new BABYLON.PBRMaterial('darkMetal', scene);
+        darkMetal.albedoColor = new BABYLON.Color3(0.16, 0.20, 0.28);
+        darkMetal.metallic = 0.85;
+        darkMetal.roughness = 0.40;
+
+        const rubber = new BABYLON.PBRMaterial('rubber', scene);
+        rubber.albedoColor = new BABYLON.Color3(0.07, 0.09, 0.12);
+        rubber.metallic = 0.02;
+        rubber.roughness = 0.95;
+
+        const plastic = new BABYLON.PBRMaterial('plastic', scene);
+        plastic.albedoColor = new BABYLON.Color3(0.07, 0.09, 0.14);
+        plastic.metallic = 0.04;
+        plastic.roughness = 0.70;
+
+        const steel = new BABYLON.PBRMaterial('steel', scene);
+        steel.albedoColor = new BABYLON.Color3(0.70, 0.74, 0.80);
+        steel.metallic = 0.95;
+        steel.roughness = 0.35;
+
+        const glass = new BABYLON.PBRMaterial('glass', scene);
+        glass.albedoColor = new BABYLON.Color3(0.25, 0.75, 0.95);
+        glass.metallic = 0.0;
+        glass.roughness = 0.08;
+        glass.alpha = 0.55;
+
+        // Pump group
+        const pump = new BABYLON.TransformNode('pump', scene);
+
+        // Base pad
+        const basePad = BABYLON.MeshBuilder.CreateBox('basePad', { width: 1.16, height: 0.06, depth: 0.96 }, scene);
+        basePad.position.y = 0.03;
+        basePad.parent = pump;
+        basePad.material = rubber;
+
+        const baseSkirt = BABYLON.MeshBuilder.CreateBox('baseSkirt', { width: 1.12, height: 0.16, depth: 0.92 }, scene);
+        baseSkirt.position.y = 0.06 + 0.08;
+        baseSkirt.parent = pump;
+        baseSkirt.material = darkMetal;
+
+        // Body
+        const body = BABYLON.MeshBuilder.CreateBox('body', { width: 0.92, height: 1.55, depth: 0.72 }, scene);
+        body.position.y = 0.22 + 1.55/2;
+        body.parent = pump;
+        body.material = paintRed;
+
+        // Side column
+        const side = BABYLON.MeshBuilder.CreateBox('side', { width: 0.16, height: 1.55, depth: 0.72 }, scene);
+        side.position.set(0.54, body.position.y, 0);
+        side.parent = pump;
+        side.material = paintDeepRed;
+
+        // Cap
+        const cap = BABYLON.MeshBuilder.CreateBox('cap', { width: 1.02, height: 0.18, depth: 0.78 }, scene);
+        cap.position.y = 0.22 + 1.55 + 0.09;
+        cap.parent = pump;
+        cap.material = paintDeepRed;
+
+        // Bezel + screen
+        const bezel = BABYLON.MeshBuilder.CreateBox('bezel', { width: 0.64, height: 0.52, depth: 0.06 }, scene);
+        bezel.position.set(0, 0.22 + 1.08, 0.36);
+        bezel.parent = pump;
+        bezel.material = plastic;
+
+        const screen = BABYLON.MeshBuilder.CreateBox('screen', { width: 0.54, height: 0.36, depth: 0.012 }, scene);
+        screen.position.set(0, 0.02, 0.037);
+        screen.parent = bezel;
+        screen.material = glass;
+
+        // Keypad
+        const keypad = BABYLON.MeshBuilder.CreateBox('keypad', { width: 0.54, height: 0.42, depth: 0.05 }, scene);
+        keypad.position.set(0, 0.22 + 0.70, 0.35);
+        keypad.parent = pump;
+        keypad.material = plastic;
+
+        for (let r=0; r<4; r++) {
+          for (let c=0; c<3; c++) {
+            const b = BABYLON.MeshBuilder.CreateBox('b'+r+c, { width: 0.10, height: 0.06, depth: 0.03 }, scene);
+            b.position.set(-0.14 + c*0.14, 0.12 + r*0.09, 0.03);
+            b.parent = keypad;
+            b.material = new BABYLON.PBRMaterial('btnMat', scene);
+            b.material.albedoColor = new BABYLON.Color3(0.92, 0.94, 0.98);
+            b.material.metallic = 0.08;
+            b.material.roughness = 0.35;
+          }
+        }
+
+        // Nozzle + hose (simplified)
+        const holster = BABYLON.MeshBuilder.CreateBox('holster', { width: 0.16, height: 0.32, depth: 0.28 }, scene);
+        holster.position.set(0.60, 0.22 + 0.86, 0.22);
+        holster.parent = pump;
+        holster.material = plastic;
+
+        const handle = BABYLON.MeshBuilder.CreateBox('handle', { width: 0.08, height: 0.22, depth: 0.07 }, scene);
+        handle.position.set(0.64, 0.22 + 0.78, 0.22);
+        handle.parent = pump;
+        handle.material = darkMetal;
+
+        const spout = BABYLON.MeshBuilder.CreateCylinder('spout', { diameterTop: 0.024, diameterBottom: 0.036, height: 0.24, tessellation: 20 }, scene);
+        spout.rotation.z = Math.PI/2;
+        spout.position.set(0.52, 0.22 + 0.86, 0.22);
+        spout.parent = pump;
+        spout.material = steel;
+
+        const hose = BABYLON.MeshBuilder.CreateTube('hose', {
+          path: [
+            new BABYLON.Vector3(0.64, 0.22 + 0.75, 0.16),
+            new BABYLON.Vector3(1.00, 0.22 + 0.60, 0.04),
+            new BABYLON.Vector3(0.86, 0.22 + 0.30, -0.18),
+            new BABYLON.Vector3(0.52, 0.22 + 0.18, -0.10),
+          ],
+          radius: 0.02,
+          tessellation: 12,
+        }, scene);
+        hose.parent = pump;
+        hose.material = rubber;
+
+        // Subtle idle rotation
+        scene.onBeforeRenderObservable.add(() => {
+          pump.rotation.y = Math.sin(performance.now() * 0.00022) * 0.06;
+        });
+
+        setDebug('OK: Babylon loaded. UA: ' + navigator.userAgent);
+        setTimeout(() => { debug.style.display = 'none'; }, 1600);
+
+        engine.runRenderLoop(() => scene.render());
+        window.addEventListener('resize', () => engine.resize());
+      } catch (err) {
+        setDebug('JS ERROR:\n\n' + (err && (err.stack || err.message) ? (err.stack || err.message) : String(err)));
+        console.error(err);
+      }
+    })();
   </script>
 </body>
 </html>
