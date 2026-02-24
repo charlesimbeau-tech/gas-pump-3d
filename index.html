@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Realistic 3D Gas Pump</title>
+  <style>
+    html, body { height: 100%; margin: 0; background: #0b0f17; }
+    #c { width: 100%; height: 100%; display: block; touch-action: none; }
+    .hud {
+      position: fixed; left: 12px; bottom: 12px; right: 12px;
+      font: 13px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: rgba(255,255,255,.88);
+      background: rgba(0,0,0,.38);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 12px;
+      padding: 10px 12px;
+      backdrop-filter: blur(10px);
+      max-width: 620px;
+    }
+    .topbar {
+      position: fixed; left: 12px; top: 12px; right: 12px;
+      display: flex; gap: 8px; align-items: center;
+      max-width: 620px;
+    }
+    .badge {
+      font: 12px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: rgba(255,255,255,.92);
+      background: rgba(120,80,255,.22);
+      border: 1px solid rgba(160,120,255,.32);
+      padding: 6px 10px;
+      border-radius: 999px;
+    }
+    a { color: #b7a7ff; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="topbar">
+    <div class="badge"><b>Realistic 3D Gas Pump</b> — drag to orbit, pinch to zoom</div>
+  </div>
+  <div class="hud">
+    Mobile: <b>1 finger</b> rotate · <b>2 fingers</b> pan · <b>pinch</b> zoom. 
+    PBR + HDR lighting for a more realistic look.
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+    import { RGBELoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/RGBELoader.js';
+
+    const canvas = document.querySelector('#c');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#0b0f17');
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(3.4, 2.2, 4.6);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.target.set(0, 1.15, 0);
+    controls.minDistance = 2.2;
+    controls.maxDistance = 10;
+
+    // --- Lighting (HDR environment + a couple of soft directionals for crispness)
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    pmrem.compileEquirectangularShader();
+
+    // Lightweight HDR from three.js examples CDN
+    new RGBELoader()
+      .setPath('https://threejs.org/examples/textures/equirectangular/')
+      .load('royal_esplanade_1k.hdr', (hdrTex) => {
+        const env = pmrem.fromEquirectangular(hdrTex).texture;
+        scene.environment = env;
+        hdrTex.dispose();
+        pmrem.dispose();
+      });
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.15));
+
+    const key = new THREE.DirectionalLight(0xffffff, 2.2);
+    key.position.set(4.5, 6.5, 3.5);
+    key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.camera.near = 0.5;
+    key.shadow.camera.far = 25;
+    key.shadow.camera.left = -6;
+    key.shadow.camera.right = 6;
+    key.shadow.camera.top = 6;
+    key.shadow.camera.bottom = -6;
+    scene.add(key);
+
+    const fill = new THREE.DirectionalLight(0x7a5cff, 0.55);
+    fill.position.set(-5.5, 2.5, -5.5);
+    scene.add(fill);
+
+    // Ground plane (receives shadow)
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(30, 30),
+      new THREE.MeshStandardMaterial({ color: 0x0f1624, roughness: 0.98, metalness: 0.0 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // --- Simple bevel-ish: build with extra edge details (not true fillet, but looks better)
+    function matPaint(color) {
+      return new THREE.MeshPhysicalMaterial({
+        color,
+        roughness: 0.35,
+        metalness: 0.25,
+        clearcoat: 0.35,
+        clearcoatRoughness: 0.35,
+      });
+    }
+
+    const matRubber = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.95, metalness: 0.02 });
+    const matDarkMetal = new THREE.MeshStandardMaterial({ color: 0x2a3346, roughness: 0.45, metalness: 0.75 });
+    const matSteel = new THREE.MeshStandardMaterial({ color: 0x98a6ba, roughness: 0.35, metalness: 0.9 });
+    const matPlastic = new THREE.MeshStandardMaterial({ color: 0x101827, roughness: 0.7, metalness: 0.05 });
+    const matGlass = new THREE.MeshPhysicalMaterial({
+      color: 0x67d6ff,
+      roughness: 0.05,
+      metalness: 0.0,
+      transmission: 0.55,
+      thickness: 0.02,
+      ior: 1.5,
+      clearcoat: 0.15,
+      clearcoatRoughness: 0.2,
+    });
+
+    function box(w, h, d, material) {
+      return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+    }
+
+    function cyl(rTop, rBot, h, material, radial = 28) {
+      return new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, h, radial), material);
+    }
+
+    // --- Pump group
+    const pump = new THREE.Group();
+
+    // Base (rubber pad + metal skirt)
+    const basePad = box(1.16, 0.06, 0.96, matRubber);
+    basePad.position.y = 0.03;
+    basePad.castShadow = true;
+    basePad.receiveShadow = true;
+    pump.add(basePad);
+
+    const baseSkirt = box(1.12, 0.16, 0.92, matDarkMetal);
+    baseSkirt.position.y = 0.06 + 0.08;
+    baseSkirt.castShadow = true;
+    baseSkirt.receiveShadow = true;
+    pump.add(baseSkirt);
+
+    // Main body
+    const body = box(0.92, 1.55, 0.72, matPaint(0xd12f2f));
+    body.position.y = 0.22 + 1.55 / 2;
+    body.castShadow = true;
+    body.receiveShadow = true;
+    pump.add(body);
+
+    // Side column (hose bay)
+    const side = box(0.16, 1.55, 0.72, matPaint(0x9d1f1f));
+    side.position.set(0.54, body.position.y, 0);
+    side.castShadow = true;
+    side.receiveShadow = true;
+    pump.add(side);
+
+    // Top cap
+    const cap = box(1.02, 0.18, 0.78, matPaint(0xa92020));
+    cap.position.y = 0.22 + 1.55 + 0.09;
+    cap.castShadow = true;
+    cap.receiveShadow = true;
+    pump.add(cap);
+
+    // Face bezel
+    const bezel = box(0.64, 0.52, 0.06, matPlastic);
+    bezel.position.set(0, 0.22 + 1.08, 0.36);
+    bezel.castShadow = true;
+    bezel.receiveShadow = true;
+    pump.add(bezel);
+
+    // Screen glass
+    const screen = box(0.54, 0.36, 0.012, matGlass);
+    screen.position.set(0, 0.02, 0.037);
+    bezel.add(screen);
+
+    // Keypad
+    const keypad = box(0.54, 0.42, 0.05, matPlastic);
+    keypad.position.set(0, 0.22 + 0.70, 0.35);
+    keypad.castShadow = true;
+    keypad.receiveShadow = true;
+    pump.add(keypad);
+
+    const btnMat = new THREE.MeshStandardMaterial({ color: 0xe8eefc, roughness: 0.35, metalness: 0.08 });
+    const btnGeom = new THREE.BoxGeometry(0.10, 0.06, 0.03);
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 3; c++) {
+        const b = new THREE.Mesh(btnGeom, btnMat);
+        b.position.set(-0.14 + c * 0.14, 0.12 + r * 0.09, 0.03);
+        b.castShadow = true;
+        keypad.add(b);
+      }
+    }
+
+    // Card reader slot
+    const slot = box(0.36, 0.05, 0.05, matDarkMetal);
+    slot.position.set(0, 0.22 + 0.52, 0.35);
+    slot.castShadow = true;
+    pump.add(slot);
+
+    // Decal/sign plate
+    const sign = box(0.76, 0.22, 0.03, new THREE.MeshStandardMaterial({ color: 0xf4f6ff, roughness: 0.65, metalness: 0.05 }));
+    sign.position.set(0, 0.22 + 1.33, 0.36);
+    sign.castShadow = true;
+    pump.add(sign);
+
+    // Holster
+    const holster = box(0.16, 0.32, 0.28, matPlastic);
+    holster.position.set(0.60, 0.22 + 0.86, 0.22);
+    holster.castShadow = true;
+    holster.receiveShadow = true;
+    pump.add(holster);
+
+    // Nozzle
+    const nozzle = new THREE.Group();
+    const handle = box(0.08, 0.22, 0.07, matDarkMetal);
+    handle.position.set(0, 0.11, 0);
+    handle.castShadow = true;
+    nozzle.add(handle);
+
+    const trigger = box(0.02, 0.10, 0.05, matSteel);
+    trigger.position.set(0.02, 0.08, 0.03);
+    trigger.castShadow = true;
+    nozzle.add(trigger);
+
+    const spout = cyl(0.018, 0.012, 0.24, matSteel);
+    spout.rotation.z = Math.PI / 2;
+    spout.position.set(-0.13, 0.16, 0);
+    spout.castShadow = true;
+    nozzle.add(spout);
+
+    nozzle.position.set(0.64, 0.22 + 0.78, 0.22);
+    nozzle.rotation.y = -0.65;
+    pump.add(nozzle);
+
+    // Hose (tube)
+    const hosePts = [
+      new THREE.Vector3(0.64, 0.22 + 0.75, 0.16),
+      new THREE.Vector3(1.00, 0.22 + 0.60, 0.04),
+      new THREE.Vector3(0.86, 0.22 + 0.30, -0.18),
+      new THREE.Vector3(0.52, 0.22 + 0.18, -0.10),
+    ];
+    const hoseCurve = new THREE.CatmullRomCurve3(hosePts);
+    const hoseGeom = new THREE.TubeGeometry(hoseCurve, 80, 0.02, 12, false);
+    const hose = new THREE.Mesh(hoseGeom, matRubber);
+    hose.castShadow = true;
+    pump.add(hose);
+
+    // Add some small metallic bolts (tiny cylinders) for realism
+    const boltGeom = new THREE.CylinderGeometry(0.012, 0.012, 0.01, 14);
+    for (const x of [-0.42, 0.42]) {
+      for (const y of [0.22 + 0.30, 0.22 + 1.20]) {
+        const bolt = new THREE.Mesh(boltGeom, matSteel);
+        bolt.rotation.x = Math.PI / 2;
+        bolt.position.set(x, y, 0.36);
+        bolt.castShadow = true;
+        pump.add(bolt);
+      }
+    }
+
+    pump.position.y = 0;
+    scene.add(pump);
+
+    // Subtle idle movement
+    const clock = new THREE.Clock();
+
+    function resize() {
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      const need = (canvas.width !== Math.floor(w * renderer.getPixelRatio())) || (canvas.height !== Math.floor(h * renderer.getPixelRatio()));
+      if (need) {
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
+    }
+
+    function render() {
+      resize();
+      const t = clock.getElapsedTime();
+      pump.rotation.y = Math.sin(t * 0.22) * 0.06;
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(render);
+    }
+
+    render();
+
+    window.addEventListener('resize', () => resize());
+  </script>
+</body>
+</html>
