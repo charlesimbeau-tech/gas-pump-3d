@@ -5,38 +5,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Realistic 3D Gas Pump</title>
   <style>
-    html, body { height: 100%; margin: 0; background: #0b0f17; }
+    html, body { height: 100%; margin: 0; background: #080d16; }
     #c { width: 100%; height: 100%; display: block; touch-action: none; }
     .hud {
       position: fixed; left: 12px; bottom: 12px; right: 12px;
       font: 13px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      color: rgba(255,255,255,.88);
-      background: rgba(0,0,0,.38);
+      color: rgba(255,255,255,.92);
+      background: rgba(0,0,0,.35);
       border: 1px solid rgba(255,255,255,.12);
       border-radius: 12px;
       padding: 10px 12px;
       backdrop-filter: blur(10px);
-      max-width: 620px;
+      max-width: 760px;
       margin: 0 auto;
     }
     .topbar {
       position: fixed; left: 12px; top: 12px; right: 12px;
       display: flex; gap: 8px; align-items: center;
-      max-width: 620px;
+      max-width: 760px;
       margin: 0 auto;
-      z-index: 5;
+      z-index: 6;
     }
     .badge {
       font: 12px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      color: rgba(255,255,255,.92);
-      background: rgba(120,80,255,.22);
-      border: 1px solid rgba(160,120,255,.32);
+      color: rgba(255,255,255,.95);
+      background: rgba(120,80,255,.24);
+      border: 1px solid rgba(160,120,255,.34);
       padding: 6px 10px;
       border-radius: 999px;
     }
     #debug {
       position: fixed; left: 12px; right: 12px; top: 60px;
-      max-width: 620px; margin: 0 auto;
+      max-width: 760px; margin: 0 auto;
       color: #fff;
       background: rgba(0,0,0,.72);
       border: 1px solid rgba(255,255,255,.12);
@@ -55,192 +55,260 @@
   </div>
   <div id="debug">Loading…</div>
   <div class="hud">
-    Mobile: <b>1 finger</b> rotate · <b>2 fingers</b> pan · <b>pinch</b> zoom.
+    Mobile: <b>1 finger</b> rotate · <b>2 fingers</b> pan · <b>pinch</b> zoom. 
+    Improved quality pass: refined materials, labels, and forecourt scene.
   </div>
 
-  <!-- Babylon.js (non-module) for maximum mobile compatibility -->
   <script src="https://cdn.babylonjs.com/babylon.js"></script>
 
   <script>
     (function () {
       const debug = document.getElementById('debug');
-      function setDebug(t){ debug.textContent = t; }
+      const setDebug = (t) => debug.textContent = t;
 
       try {
         const canvas = document.getElementById('c');
         const engine = new BABYLON.Engine(canvas, true, {
           preserveDrawingBuffer: true,
           stencil: true,
-          disableWebGL2Support: false,
+          antialias: true
         });
 
         const scene = new BABYLON.Scene(engine);
-        scene.clearColor = new BABYLON.Color4(0.043, 0.059, 0.090, 1);
+        scene.clearColor = new BABYLON.Color4(0.03, 0.05, 0.09, 1);
+        scene.imageProcessingConfiguration.toneMappingEnabled = true;
+        scene.imageProcessingConfiguration.toneMappingType = BABYLON.ImageProcessingConfiguration.TONEMAPPING_ACES;
+        scene.imageProcessingConfiguration.exposure = 1.1;
+        scene.imageProcessingConfiguration.contrast = 1.12;
 
         // Camera
-        const camera = new BABYLON.ArcRotateCamera('cam', -Math.PI/2.2, Math.PI/3, 6.0, new BABYLON.Vector3(0, 1.2, 0), scene);
+        const camera = new BABYLON.ArcRotateCamera('cam', -Math.PI / 2.15, Math.PI / 3.1, 5.6, new BABYLON.Vector3(0, 1.15, 0), scene);
         camera.attachControl(canvas, true);
-        camera.lowerRadiusLimit = 2.2;
-        camera.upperRadiusLimit = 12;
+        camera.lowerRadiusLimit = 2.1;
+        camera.upperRadiusLimit = 10;
         camera.panningSensibility = 1200;
-        camera.wheelPrecision = 50;
+        camera.wheelPrecision = 45;
 
-        // Lights
+        // Lighting + subtle environment
         const hemi = new BABYLON.HemisphericLight('hemi', new BABYLON.Vector3(0, 1, 0), scene);
-        hemi.intensity = 0.85;
+        hemi.intensity = 0.7;
         hemi.groundColor = new BABYLON.Color3(0.05, 0.06, 0.08);
 
-        const key = new BABYLON.DirectionalLight('key', new BABYLON.Vector3(-0.6, -1, -0.4), scene);
-        key.position = new BABYLON.Vector3(6, 10, 6);
-        key.intensity = 1.35;
+        const key = new BABYLON.DirectionalLight('key', new BABYLON.Vector3(-0.65, -1, -0.3), scene);
+        key.position = new BABYLON.Vector3(5, 8, 4);
+        key.intensity = 1.25;
 
-        // Ground
-        const ground = BABYLON.MeshBuilder.CreateGround('ground', { width: 30, height: 30 }, scene);
+        const rim = new BABYLON.DirectionalLight('rim', new BABYLON.Vector3(0.7, -0.8, 0.6), scene);
+        rim.position = new BABYLON.Vector3(-4, 4, -4);
+        rim.intensity = 0.45;
+        rim.diffuse = new BABYLON.Color3(0.58, 0.50, 0.95);
+
+        // Ground forecourt (painted concrete look)
+        const ground = BABYLON.MeshBuilder.CreateGround('ground', { width: 24, height: 24 }, scene);
         const groundMat = new BABYLON.PBRMaterial('groundMat', scene);
-        groundMat.albedoColor = new BABYLON.Color3(0.06, 0.08, 0.13);
-        groundMat.roughness = 1.0;
-        groundMat.metallic = 0.0;
+        groundMat.albedoColor = new BABYLON.Color3(0.32, 0.37, 0.47);
+        groundMat.roughness = 0.95;
+        groundMat.metallic = 0;
         ground.material = groundMat;
+
+        const laneStripe = BABYLON.MeshBuilder.CreateGround('stripe', { width: 24, height: 0.2 }, scene);
+        laneStripe.position.y = 0.002;
+        laneStripe.position.z = 2.2;
+        const stripeMat = new BABYLON.StandardMaterial('stripeMat', scene);
+        stripeMat.diffuseColor = new BABYLON.Color3(0.92, 0.92, 0.82);
+        laneStripe.material = stripeMat;
 
         // Materials
         const paintRed = new BABYLON.PBRMaterial('paintRed', scene);
-        paintRed.albedoColor = new BABYLON.Color3(0.82, 0.16, 0.16);
-        paintRed.metallic = 0.3;
-        paintRed.roughness = 0.35;
+        paintRed.albedoColor = new BABYLON.Color3(0.79, 0.17, 0.17);
+        paintRed.metallic = 0.33;
+        paintRed.roughness = 0.34;
         paintRed.clearCoat.isEnabled = true;
-        paintRed.clearCoat.intensity = 0.35;
+        paintRed.clearCoat.intensity = 0.42;
 
         const paintDeepRed = new BABYLON.PBRMaterial('paintDeepRed', scene);
-        paintDeepRed.albedoColor = new BABYLON.Color3(0.62, 0.12, 0.12);
+        paintDeepRed.albedoColor = new BABYLON.Color3(0.62, 0.11, 0.11);
         paintDeepRed.metallic = 0.28;
         paintDeepRed.roughness = 0.38;
         paintDeepRed.clearCoat.isEnabled = true;
-        paintDeepRed.clearCoat.intensity = 0.25;
+        paintDeepRed.clearCoat.intensity = 0.32;
 
         const darkMetal = new BABYLON.PBRMaterial('darkMetal', scene);
-        darkMetal.albedoColor = new BABYLON.Color3(0.16, 0.20, 0.28);
-        darkMetal.metallic = 0.85;
-        darkMetal.roughness = 0.40;
+        darkMetal.albedoColor = new BABYLON.Color3(0.14, 0.18, 0.24);
+        darkMetal.metallic = 0.87;
+        darkMetal.roughness = 0.4;
+
+        const steel = new BABYLON.PBRMaterial('steel', scene);
+        steel.albedoColor = new BABYLON.Color3(0.72, 0.75, 0.82);
+        steel.metallic = 0.95;
+        steel.roughness = 0.32;
+
+        const plastic = new BABYLON.PBRMaterial('plastic', scene);
+        plastic.albedoColor = new BABYLON.Color3(0.08, 0.1, 0.14);
+        plastic.metallic = 0.04;
+        plastic.roughness = 0.72;
 
         const rubber = new BABYLON.PBRMaterial('rubber', scene);
-        rubber.albedoColor = new BABYLON.Color3(0.07, 0.09, 0.12);
+        rubber.albedoColor = new BABYLON.Color3(0.05, 0.06, 0.08);
         rubber.metallic = 0.02;
         rubber.roughness = 0.95;
 
-        const plastic = new BABYLON.PBRMaterial('plastic', scene);
-        plastic.albedoColor = new BABYLON.Color3(0.07, 0.09, 0.14);
-        plastic.metallic = 0.04;
-        plastic.roughness = 0.70;
+        const screenMat = new BABYLON.PBRMaterial('screenMat', scene);
+        screenMat.albedoColor = new BABYLON.Color3(0.18, 0.7, 0.95);
+        screenMat.emissiveColor = new BABYLON.Color3(0.08, 0.25, 0.35);
+        screenMat.alpha = 0.82;
+        screenMat.roughness = 0.08;
 
-        const steel = new BABYLON.PBRMaterial('steel', scene);
-        steel.albedoColor = new BABYLON.Color3(0.70, 0.74, 0.80);
-        steel.metallic = 0.95;
-        steel.roughness = 0.35;
-
-        const glass = new BABYLON.PBRMaterial('glass', scene);
-        glass.albedoColor = new BABYLON.Color3(0.25, 0.75, 0.95);
-        glass.metallic = 0.0;
-        glass.roughness = 0.08;
-        glass.alpha = 0.55;
-
-        // Pump group
+        // Pump root
         const pump = new BABYLON.TransformNode('pump', scene);
 
-        // Base pad
-        const basePad = BABYLON.MeshBuilder.CreateBox('basePad', { width: 1.16, height: 0.06, depth: 0.96 }, scene);
-        basePad.position.y = 0.03;
+        // Base
+        const basePad = BABYLON.MeshBuilder.CreateBox('basePad', { width: 1.2, height: 0.07, depth: 0.98 }, scene);
+        basePad.position.y = 0.035;
         basePad.parent = pump;
         basePad.material = rubber;
 
-        const baseSkirt = BABYLON.MeshBuilder.CreateBox('baseSkirt', { width: 1.12, height: 0.16, depth: 0.92 }, scene);
-        baseSkirt.position.y = 0.06 + 0.08;
+        const baseSkirt = BABYLON.MeshBuilder.CreateBox('baseSkirt', { width: 1.14, height: 0.18, depth: 0.94 }, scene);
+        baseSkirt.position.y = 0.16;
         baseSkirt.parent = pump;
         baseSkirt.material = darkMetal;
 
-        // Body
-        const body = BABYLON.MeshBuilder.CreateBox('body', { width: 0.92, height: 1.55, depth: 0.72 }, scene);
-        body.position.y = 0.22 + 1.55/2;
+        // Main column
+        const body = BABYLON.MeshBuilder.CreateBox('body', { width: 0.92, height: 1.56, depth: 0.72 }, scene);
+        body.position.y = 1.02;
         body.parent = pump;
         body.material = paintRed;
 
-        // Side column
-        const side = BABYLON.MeshBuilder.CreateBox('side', { width: 0.16, height: 1.55, depth: 0.72 }, scene);
-        side.position.set(0.54, body.position.y, 0);
+        const side = BABYLON.MeshBuilder.CreateBox('side', { width: 0.16, height: 1.56, depth: 0.72 }, scene);
+        side.position.set(0.54, 1.02, 0);
         side.parent = pump;
         side.material = paintDeepRed;
 
-        // Cap
-        const cap = BABYLON.MeshBuilder.CreateBox('cap', { width: 1.02, height: 0.18, depth: 0.78 }, scene);
-        cap.position.y = 0.22 + 1.55 + 0.09;
+        const cap = BABYLON.MeshBuilder.CreateBox('cap', { width: 1.02, height: 0.2, depth: 0.78 }, scene);
+        cap.position.y = 1.9;
         cap.parent = pump;
         cap.material = paintDeepRed;
 
-        // Bezel + screen
-        const bezel = BABYLON.MeshBuilder.CreateBox('bezel', { width: 0.64, height: 0.52, depth: 0.06 }, scene);
-        bezel.position.set(0, 0.22 + 1.08, 0.36);
+        // Display assembly
+        const bezel = BABYLON.MeshBuilder.CreateBox('bezel', { width: 0.66, height: 0.54, depth: 0.06 }, scene);
+        bezel.position.set(0, 1.29, 0.37);
         bezel.parent = pump;
         bezel.material = plastic;
 
-        const screen = BABYLON.MeshBuilder.CreateBox('screen', { width: 0.54, height: 0.36, depth: 0.012 }, scene);
+        const screen = BABYLON.MeshBuilder.CreateBox('screen', { width: 0.56, height: 0.38, depth: 0.012 }, scene);
         screen.position.set(0, 0.02, 0.037);
         screen.parent = bezel;
-        screen.material = glass;
+        screen.material = screenMat;
 
-        // Keypad
+        // Fuel grades labels (dynamic texture)
+        const labelPlane = BABYLON.MeshBuilder.CreatePlane('labelPlane', { width: 0.56, height: 0.12 }, scene);
+        labelPlane.position.set(0, -0.19, 0.037);
+        labelPlane.parent = bezel;
+        const labelTex = new BABYLON.DynamicTexture('labelTex', { width: 1024, height: 256 }, scene, false);
+        const ctx = labelTex.getContext();
+        ctx.fillStyle = '#0f1524'; ctx.fillRect(0, 0, 1024, 256);
+        ctx.fillStyle = '#facc15'; ctx.fillRect(30, 48, 290, 160);
+        ctx.fillStyle = '#fb7185'; ctx.fillRect(367, 48, 290, 160);
+        ctx.fillStyle = '#22d3ee'; ctx.fillRect(704, 48, 290, 160);
+        ctx.fillStyle = '#111827'; ctx.font = 'bold 76px Arial'; ctx.fillText('87', 128, 156);
+        ctx.fillText('89', 465, 156);
+        ctx.fillText('93', 802, 156);
+        labelTex.update();
+        const labelMat = new BABYLON.StandardMaterial('labelMat', scene);
+        labelMat.diffuseTexture = labelTex;
+        labelMat.emissiveColor = new BABYLON.Color3(0.08, 0.08, 0.08);
+        labelPlane.material = labelMat;
+
+        // Keypad + card slot
         const keypad = BABYLON.MeshBuilder.CreateBox('keypad', { width: 0.54, height: 0.42, depth: 0.05 }, scene);
-        keypad.position.set(0, 0.22 + 0.70, 0.35);
+        keypad.position.set(0, 0.92, 0.355);
         keypad.parent = pump;
         keypad.material = plastic;
 
-        for (let r=0; r<4; r++) {
-          for (let c=0; c<3; c++) {
-            const b = BABYLON.MeshBuilder.CreateBox('b'+r+c, { width: 0.10, height: 0.06, depth: 0.03 }, scene);
-            b.position.set(-0.14 + c*0.14, 0.12 + r*0.09, 0.03);
+        const cardSlot = BABYLON.MeshBuilder.CreateBox('cardSlot', { width: 0.36, height: 0.05, depth: 0.05 }, scene);
+        cardSlot.position.set(0, 0.75, 0.355);
+        cardSlot.parent = pump;
+        cardSlot.material = darkMetal;
+
+        const btnMat = new BABYLON.PBRMaterial('btnMat', scene);
+        btnMat.albedoColor = new BABYLON.Color3(0.92, 0.94, 0.98);
+        btnMat.metallic = 0.08;
+        btnMat.roughness = 0.34;
+        for (let r = 0; r < 4; r++) {
+          for (let c = 0; c < 3; c++) {
+            const b = BABYLON.MeshBuilder.CreateBox(`btn_${r}_${c}`, { width: 0.1, height: 0.06, depth: 0.03 }, scene);
+            b.position.set(-0.14 + c * 0.14, 0.12 + r * 0.09, 0.03);
             b.parent = keypad;
-            b.material = new BABYLON.PBRMaterial('btnMat', scene);
-            b.material.albedoColor = new BABYLON.Color3(0.92, 0.94, 0.98);
-            b.material.metallic = 0.08;
-            b.material.roughness = 0.35;
+            b.material = btnMat;
           }
         }
 
-        // Nozzle + hose (simplified)
-        const holster = BABYLON.MeshBuilder.CreateBox('holster', { width: 0.16, height: 0.32, depth: 0.28 }, scene);
-        holster.position.set(0.60, 0.22 + 0.86, 0.22);
+        // Side holster/nozzle/hose
+        const holster = BABYLON.MeshBuilder.CreateBox('holster', { width: 0.16, height: 0.33, depth: 0.28 }, scene);
+        holster.position.set(0.61, 1.08, 0.22);
         holster.parent = pump;
         holster.material = plastic;
 
-        const handle = BABYLON.MeshBuilder.CreateBox('handle', { width: 0.08, height: 0.22, depth: 0.07 }, scene);
-        handle.position.set(0.64, 0.22 + 0.78, 0.22);
-        handle.parent = pump;
-        handle.material = darkMetal;
+        const nozzle = BABYLON.MeshBuilder.CreateBox('nozzle', { width: 0.08, height: 0.22, depth: 0.07 }, scene);
+        nozzle.position.set(0.64, 1.0, 0.22);
+        nozzle.rotation.y = -0.6;
+        nozzle.parent = pump;
+        nozzle.material = darkMetal;
 
-        const spout = BABYLON.MeshBuilder.CreateCylinder('spout', { diameterTop: 0.024, diameterBottom: 0.036, height: 0.24, tessellation: 20 }, scene);
-        spout.rotation.z = Math.PI/2;
-        spout.position.set(0.52, 0.22 + 0.86, 0.22);
+        const spout = BABYLON.MeshBuilder.CreateCylinder('spout', { diameterTop: 0.02, diameterBottom: 0.03, height: 0.24, tessellation: 24 }, scene);
+        spout.rotation.z = Math.PI / 2;
+        spout.position.set(0.52, 1.08, 0.22);
         spout.parent = pump;
         spout.material = steel;
 
         const hose = BABYLON.MeshBuilder.CreateTube('hose', {
           path: [
-            new BABYLON.Vector3(0.64, 0.22 + 0.75, 0.16),
-            new BABYLON.Vector3(1.00, 0.22 + 0.60, 0.04),
-            new BABYLON.Vector3(0.86, 0.22 + 0.30, -0.18),
-            new BABYLON.Vector3(0.52, 0.22 + 0.18, -0.10),
+            new BABYLON.Vector3(0.63, 0.98, 0.16),
+            new BABYLON.Vector3(0.96, 0.82, 0.05),
+            new BABYLON.Vector3(0.84, 0.5, -0.17),
+            new BABYLON.Vector3(0.5, 0.38, -0.1)
           ],
           radius: 0.02,
-          tessellation: 12,
+          tessellation: 12
         }, scene);
         hose.parent = pump;
         hose.material = rubber;
 
-        // Subtle idle rotation
+        // Top sign (dynamic texture logo style)
+        const topSign = BABYLON.MeshBuilder.CreatePlane('topSign', { width: 0.78, height: 0.2 }, scene);
+        topSign.position.set(0, 1.93, 0.40);
+        topSign.parent = pump;
+        const signTex = new BABYLON.DynamicTexture('signTex', { width: 1024, height: 256 }, scene, false);
+        const sctx = signTex.getContext();
+        sctx.fillStyle = '#f8fafc'; sctx.fillRect(0, 0, 1024, 256);
+        sctx.fillStyle = '#dc2626'; sctx.fillRect(0, 0, 1024, 22);
+        sctx.fillStyle = '#111827'; sctx.font = 'bold 88px Arial'; sctx.fillText('FUEL STATION', 250, 150);
+        sctx.fillStyle = '#2563eb'; sctx.font = 'bold 52px Arial'; sctx.fillText('24 HOURS', 355, 220);
+        signTex.update();
+        const signMat = new BABYLON.StandardMaterial('signMat', scene);
+        signMat.diffuseTexture = signTex;
+        topSign.material = signMat;
+
+        // Scene dressing (bollards)
+        function bollard(x, z) {
+          const post = BABYLON.MeshBuilder.CreateCylinder(`bol_${x}_${z}`, { diameter: 0.12, height: 0.8, tessellation: 20 }, scene);
+          post.position.set(x, 0.4, z);
+          post.material = steel;
+          const ring = BABYLON.MeshBuilder.CreateTorus(`ring_${x}_${z}`, { diameter: 0.14, thickness: 0.03, tessellation: 24 }, scene);
+          ring.position.set(x, 0.72, z);
+          ring.rotation.x = Math.PI / 2;
+          ring.material = paintDeepRed;
+        }
+        bollard(-1.0, 1.0);
+        bollard(1.2, 1.0);
+
+        // Small idle rotation to keep it alive
         scene.onBeforeRenderObservable.add(() => {
           pump.rotation.y = Math.sin(performance.now() * 0.00022) * 0.06;
         });
 
-        setDebug('OK: Babylon loaded. UA: ' + navigator.userAgent);
-        setTimeout(() => { debug.style.display = 'none'; }, 1600);
+        setDebug('OK: Quality pass loaded.');
+        setTimeout(() => { debug.style.display = 'none'; }, 1500);
 
         engine.runRenderLoop(() => scene.render());
         window.addEventListener('resize', () => engine.resize());
