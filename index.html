@@ -45,9 +45,10 @@
   </div>
 
   <script type="module">
-    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-    import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
-    import { RGBELoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/RGBELoader.js';
+    // Local vendored three.js to avoid mobile browsers blocking cross-site module imports.
+    import * as THREE from './vendor/three/three.module.js';
+    import { OrbitControls } from './vendor/three/examples/jsm/controls/OrbitControls.js';
+    import { RGBELoader } from './vendor/three/examples/jsm/loaders/RGBELoader.js';
 
     function showOverlay(text) {
       const div = document.createElement('div');
