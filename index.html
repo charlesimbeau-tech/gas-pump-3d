@@ -62,6 +62,14 @@
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#0b0f17');
 
+    // Basic WebGL support check + user-friendly error
+    if (!renderer.capabilities.isWebGL2 && !renderer.capabilities.isWebGL) {
+      const div = document.createElement('div');
+      div.style.cssText = 'position:fixed;inset:12px;display:flex;align-items:center;justify-content:center;color:#fff;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px;font:14px system-ui;';
+      div.textContent = 'WebGL is not available in this browser/device, so the 3D view cannot render.';
+      document.body.appendChild(div);
+    }
+
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(3.4, 2.2, 4.6);
 
@@ -78,16 +86,28 @@
     // Lightweight HDR from three.js examples CDN
     new RGBELoader()
       .setPath('https://threejs.org/examples/textures/equirectangular/')
-      .load('royal_esplanade_1k.hdr', (hdrTex) => {
-        const env = pmrem.fromEquirectangular(hdrTex).texture;
-        scene.environment = env;
-        hdrTex.dispose();
-        pmrem.dispose();
-      });
+      .load(
+        'royal_esplanade_1k.hdr',
+        (hdrTex) => {
+          const env = pmrem.fromEquirectangular(hdrTex).texture;
+          scene.environment = env;
+          hdrTex.dispose();
+          pmrem.dispose();
+        },
+        undefined,
+        (err) => {
+          console.warn('HDR environment failed to load; continuing with standard lights.', err);
+          try { pmrem.dispose(); } catch {}
+        }
+      );
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.15));
+    // If HDR doesn't load (or takes time), keep the object visible with decent baseline lighting.
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    const hemi = new THREE.HemisphereLight(0xbfd7ff, 0x0b0f17, 0.65);
+    hemi.position.set(0, 6, 0);
+    scene.add(hemi);
 
-    const key = new THREE.DirectionalLight(0xffffff, 2.2);
+    const key = new THREE.DirectionalLight(0xffffff, 3.2);
     key.position.set(4.5, 6.5, 3.5);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
@@ -99,7 +119,7 @@
     key.shadow.camera.bottom = -6;
     scene.add(key);
 
-    const fill = new THREE.DirectionalLight(0x7a5cff, 0.55);
+    const fill = new THREE.DirectionalLight(0x7a5cff, 0.85);
     fill.position.set(-5.5, 2.5, -5.5);
     scene.add(fill);
 
